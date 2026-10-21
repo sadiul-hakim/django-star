@@ -6,6 +6,8 @@ from django.conf import settings
 from django_star.console import console
 from django_star.utils import (
     create_backup,
+    ensure_include_imported,
+    is_route_mounted,
     locate_settings_file,
     safe_insert_into_collection,
 )
@@ -157,23 +159,14 @@ class Command(BaseCommand):
 
         content = root_urls_path.read_text(encoding="utf-8")
 
-        # Check if route is already mounted
-        if f'"{app_module}.urls"' in content or f"'{app_module}.urls'" in content:
+        # Check if route is already mounted in urlpatterns
+        if is_route_mounted(content, app_module):
             return
 
         create_backup(root_urls_path)
 
         # 1. Ensure 'include' is imported
-        if "include" not in content:
-            if re.search(r"from django\.urls import ([^\n\r]+)", content):
-                content = re.sub(
-                    r"from django\.urls import ([^\n\r]+)",
-                    r"from django.urls import \1, include",
-                    content,
-                    count=1,
-                )
-            else:
-                content = "from django.urls import include\n" + content
+        content = ensure_include_imported(content)
 
         # 2. Append route to urlpatterns
         new_route = f'    path("{app_name}/", include("{app_module}.urls")),\n'

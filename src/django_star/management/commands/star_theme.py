@@ -11,6 +11,7 @@ from rich.table import Table
 from django_star.console import console
 from django_star.utils import (
     create_backup,
+    ensure_include_imported,
     locate_root_urls_file,
     locate_settings_file,
     safe_insert_into_collection,
@@ -446,16 +447,7 @@ class Command(BaseCommand):
         create_backup(urls_path)
 
         # Ensure include is imported
-        if "include" not in content:
-            if re.search(r"from django\.urls import ([^\n\r]+)", content):
-                content = re.sub(
-                    r"from django\.urls import ([^\n\r]+)",
-                    r"from django.urls import \1, include",
-                    content,
-                    count=1,
-                )
-            else:
-                content = "from django.urls import include\n" + content
+        content = ensure_include_imported(content)
 
         grappelli_entry = '    path("grappelli/", include("grappelli.urls")),\n'
 

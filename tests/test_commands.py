@@ -3,7 +3,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from django.core.management import get_commands
-from django_star.utils import safe_insert_into_collection, create_backup
+from django_star.utils import (
+    safe_insert_into_collection,
+    create_backup,
+    ensure_include_imported,
+    is_include_imported,
+)
 from django_star.management.commands.star_app import Command as StarAppCommand
 from django_star.management.commands.star_route import Command as StarRouteCommand
 from django_star.management.commands.star_admin import Command as StarAdminCommand
@@ -130,6 +135,75 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
             self.assertIn('"billing/"', updated)
             self.assertIn('include("billing.urls")', updated)
             self.assertIn("include", updated)
+
+    def test_root_urls_with_django_docstring_imports_include(self):
+        cmd = StarAppCommand()
+        django_default_urls = '''"""
+URL configuration for myproject.
+
+Including another URLconf
+    1. Import the include() function: from django.urls import include, path
+    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+"""
+from django.contrib import admin
+from django.urls import path
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+]
+'''
+        with tempfile.TemporaryDirectory() as tmpdir:
+            urls_file = Path(tmpdir) / "urls.py"
+            urls_file.write_text(django_default_urls, encoding="utf-8")
+
+            with patch("django_star.management.commands.star_app.settings") as mock_settings:
+                mock_settings.BASE_DIR = tmpdir
+                mock_settings.ROOT_URLCONF = "urls"
+                cmd._wire_root_urls("blog", "blog")
+
+            updated = urls_file.read_text(encoding="utf-8")
+            # Verify include is imported in the code, not just in the docstring
+            self.assertIn("from django.urls import path, include", updated)
+            self.assertIn('path("blog/", include("blog.urls"))', updated)
+
+    def test_ensure_include_imported_helper(self):
+        # 1. Single line without include
+        code1 = "from django.urls import path\nurlpatterns = []"
+        self.assertEqual(
+            ensure_include_imported(code1),
+            "from django.urls import path, include\nurlpatterns = []",
+        )
+
+        # 2. Single line with comment
+        code2 = "from django.urls import path  # url helpers\nurlpatterns = []"
+        self.assertEqual(
+            ensure_include_imported(code2),
+            "from django.urls import path, include  # url helpers\nurlpatterns = []",
+        )
+
+        # 3. Already imported single line
+        code3 = "from django.urls import path, include\nurlpatterns = []"
+        self.assertEqual(ensure_include_imported(code3), code3)
+
+        code3_rev = "from django.urls import include, path\nurlpatterns = []"
+        self.assertEqual(ensure_include_imported(code3_rev), code3_rev)
+
+        # 4. Multiline import without include
+        code4 = "from django.urls import (\n    path,\n)\nurlpatterns = []"
+        res4 = ensure_include_imported(code4)
+        self.assertIn("include,", res4)
+        self.assertTrue(is_include_imported(res4))
+
+        # 5. Multiline import with include already present
+        code5 = "from django.urls import (\n    path,\n    include,\n)\nurlpatterns = []"
+        self.assertEqual(ensure_include_imported(code5), code5)
+
+        # 6. No django.urls import
+        code6 = "urlpatterns = []"
+        self.assertEqual(
+            ensure_include_imported(code6),
+            "from django.urls import include\nurlpatterns = []",
+        )
 
     def test_root_urls_unparseable_fallback_warning(self):
         cmd = StarRouteCommand()
@@ -395,6 +469,61 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
             with patch("django_star.management.commands.star_theme.locate_settings_file", return_value=settings_file):
                 with self.assertRaises(CommandError):
                     cmd.handle(theme="invalid_theme_name", remove=False, no_pip=True, list=False, yes=True)
+
+    def test_star_route_with_django_docstrings(self):
+        cmd = StarRouteCommand()
+        django_default_urls = '''"""
+URL configuration for myproject.
+
+Including another URLconf
+    1. Import the include() function: from django.urls import include, path
+    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+"""
+from django.contrib import admin
+from django.urls import path
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+]
+'''
+        with tempfile.TemporaryDirectory() as tmpdir:
+            urls_file = Path(tmpdir) / "urls.py"
+            urls_file.write_text(django_default_urls, encoding="utf-8")
+
+            with patch("django_star.management.commands.star_route.settings") as mock_settings:
+                mock_settings.BASE_DIR = tmpdir
+                mock_settings.ROOT_URLCONF = "urls"
+                cmd._wire_root_urls("blog", "blog")
+
+            updated = urls_file.read_text(encoding="utf-8")
+            self.assertIn("from django.urls import path, include", updated)
+            self.assertIn('path("blog/", include("blog.urls"))', updated)
+
+    def test_star_theme_grappelli_with_django_docstrings(self):
+        cmd = StarThemeCommand()
+        django_default_urls = '''"""
+URL configuration for myproject.
+
+Including another URLconf
+    1. Import the include() function: from django.urls import include, path
+    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+"""
+from django.contrib import admin
+from django.urls import path
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+]
+'''
+        with tempfile.TemporaryDirectory() as tmpdir:
+            urls_file = Path(tmpdir) / "urls.py"
+            urls_file.write_text(django_default_urls, encoding="utf-8")
+            with patch("django_star.management.commands.star_theme.locate_root_urls_file", return_value=urls_file):
+                res = cmd._wire_grappelli_urls(remove=False)
+            self.assertTrue(res)
+            updated = urls_file.read_text(encoding="utf-8")
+            self.assertIn("from django.urls import path, include", updated)
+            self.assertIn('path("grappelli/", include("grappelli.urls"))', updated)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,12 @@ from django.core.management.base import BaseCommand, CommandError
 from django.apps import apps
 from django.conf import settings
 from django_star.console import console
-from django_star.utils import create_backup, safe_insert_into_collection
+from django_star.utils import (
+    create_backup,
+    ensure_include_imported,
+    is_route_mounted,
+    safe_insert_into_collection,
+)
 
 APP_URLS_TEMPLATE = """from django.urls import path
 from . import views
@@ -130,10 +135,8 @@ class Command(BaseCommand):
 
         content = root_urls_path.read_text(encoding="utf-8")
 
-        # Check if already included
-        route_signature = f'"{app_module}.urls"'
-        alt_signature = f"'{app_module}.urls'"
-        if route_signature in content or alt_signature in content:
+        # Check if already included in urlpatterns
+        if is_route_mounted(content, app_module):
             console.print(
                 f"[bold yellow]⚠ '{app_module}.urls' is already mounted in {root_urls_path.name}.[/bold yellow]"
             )
@@ -142,16 +145,7 @@ class Command(BaseCommand):
         create_backup(root_urls_path)
 
         # 1. Ensure 'include' is imported from django.urls
-        if "include" not in content:
-            if re.search(r"from django\.urls import ([^\n\r]+)", content):
-                content = re.sub(
-                    r"from django\.urls import ([^\n\r]+)",
-                    r"from django.urls import \1, include",
-                    content,
-                    count=1,
-                )
-            else:
-                content = "from django.urls import include\n" + content
+        content = ensure_include_imported(content)
 
         # 2. Append route to urlpatterns
         new_route = f'    path("{route_prefix}/", include("{app_module}.urls")),\n'

@@ -1,3 +1,4 @@
+import ast
 import re
 from pathlib import Path
 from django.conf import settings
@@ -196,4 +197,107 @@ def update_theme_in_settings(
 
     new_body = "".join(kept_lines)
     return f"{head}{new_body}{tail}", removed_apps
+
+
+def is_include_imported(content: str) -> bool:
+    """
+    Checks if 'include' is already imported from django.urls.
+    Uses AST to avoid false positives in docstrings or comments.
+    """
+    try:
+        tree = ast.parse(content)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "django.urls":
+                for alias in node.names:
+                    if alias.name in ("include", "*"):
+                        return True
+    except Exception:
+        # Fallback regex if AST parsing fails
+        if re.search(
+            r"^[ \t]*from\s+django\.urls\s+import\s+[^#\n]*\binclude\b",
+            content,
+            re.MULTILINE,
+        ):
+            return True
+        if re.search(
+            r"from\s+django\.urls\s+import\s*\([^)]*\binclude\b[^)]*\)",
+            content,
+            re.DOTALL,
+        ):
+            return True
+    return False
+
+
+def is_route_mounted(content: str, app_module: str) -> bool:
+    """
+    Checks if an app's URLs are already mounted inside urlpatterns.
+    Parses urlpatterns specifically to avoid false positives from docstrings or comments.
+    """
+    try:
+        tree = ast.parse(content)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "urlpatterns":
+                        lines = content.splitlines()
+                        start_line = node.lineno - 1
+                        end_line = getattr(node, "end_lineno", len(lines))
+                        urls_block = "\n".join(lines[start_line:end_line])
+                        return (f'"{app_module}.urls"' in urls_block) or (f"'{app_module}.urls'" in urls_block)
+    except Exception:
+        pass
+
+    m = re.search(r"urlpatterns\s*=\s*(\[|\()(.*?)(\]|\))", content, re.DOTALL)
+    if m:
+        block = m.group(2)
+        return (f'"{app_module}.urls"' in block) or (f"'{app_module}.urls'" in block)
+
+    return (f'"{app_module}.urls"' in content) or (f"'{app_module}.urls'" in content)
+
+
+def ensure_include_imported(content: str) -> str:
+    """
+    Ensures that 'include' is imported from django.urls in the provided urls.py content.
+    If 'include' is already imported, returns content unmodified.
+    Otherwise, appends 'include' to an existing 'from django.urls import ...' statement,
+    or adds a new import line.
+    """
+    if is_include_imported(content):
+        return content
+
+    # 1. Multiline import: from django.urls import ( ... )
+    multiline_match = re.search(
+        r"(from\s+django\.urls\s+import\s*\()([^)]*)(\))", content, re.DOTALL
+    )
+    if multiline_match:
+        imports = multiline_match.group(2)
+        trimmed = imports.rstrip()
+        if trimmed and not trimmed.endswith(","):
+            new_imports = f"{trimmed},\n    include,\n"
+        else:
+            new_imports = f"{trimmed}\n    include,\n"
+        return (
+            content[: multiline_match.start(2)]
+            + new_imports
+            + content[multiline_match.start(3) :]
+        )
+
+    # 2. Single line import: from django.urls import path
+    single_line_match = re.search(
+        r"^[ \t]*from\s+django\.urls\s+import\s+([^#\n\r]+?)(\s*(?:#.*)?)$",
+        content,
+        re.MULTILINE,
+    )
+    if single_line_match:
+        line_start = single_line_match.start()
+        line_end = single_line_match.end()
+        raw_imports = single_line_match.group(1).rstrip()
+        trailing = single_line_match.group(2)
+        if trailing.strip() and not trailing.startswith(" "):
+            trailing = "  " + trailing.lstrip()
+        new_line = f"from django.urls import {raw_imports}, include{trailing}"
+        return content[:line_start] + new_line + content[line_end:]
+
+    # 3. No django.urls import found; prepend to content
+    return "from django.urls import include\n" + content
 
