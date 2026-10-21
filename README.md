@@ -19,6 +19,7 @@ Artisan-style developer automation, route inspection, and code generators for Dj
 * **Django Ninja Schema Generator (`star_schema`)**: Maps ORM model field types to typed Python type hints, generating `In` and `Out` Pydantic `Schema` definitions.
 * **Service Layer Scaffolding (`star_service`)**: Instantly creates `<app>/services/<name>_service.py` files with atomic transaction wrappers.
 * **Management Command Generator (`star_command`)**: Generates nested `management/commands/` directories and runnable `BaseCommand` skeletons in a single step.
+* **Template Scaffolding (`star_template`)**: Creates namespaced templates with smart root layout detection (`base`/`layout`), template inheritance (`-e`), HTML5 boilerplates (`--html5`), and flat options (`--flat`).
 * **Terminal Styling**: Powered by [Rich](https://github.com/Textualize/rich) for formatted terminal feedback.
 
 ---
@@ -230,6 +231,45 @@ python manage.py star_command core sync_data
 
 ---
 
+### 10. Template Scaffolding (`star_template`)
+
+Generates templates inside your app following Django's official **template namespacing** standard (`<app>/templates/<app>/<name>.html`), preventing naming collisions across installed applications:
+
+```bash
+python manage.py star_template <app_name> <template_name> [options]
+```
+
+#### Smart Template Behavior
+
+* **Intelligent Root Layout Detection**:
+  If the template is named `base` or `layout` (e.g. `python manage.py star_template website base`), `star_template` automatically detects that it is your root layout and generates a full HTML5 boilerplate with semantic tags (`<header>`, `<main>`, `<footer>`), viewport meta, and template blocks (`title`, `extra_css`, `content`, `extra_js`) without needing `--html5`.
+* **Standard Component Fragments**:
+  Regular templates (e.g. `page1`, `detail`) default to modular component sections wrapped in `{% block content %}`.
+* **Template Inheritance (`-e` / `--extends`)**:
+  Inherits from another template. Automatically resolves template names without `.html` (e.g. `-e base` $\rightarrow$ `{% extends "base.html" %}`):
+  ```bash
+  python manage.py star_template website page2 -e base
+  ```
+* **Explicit HTML5 Boilerplate (`--html5`)**:
+  Forces complete HTML5 document generation on any template name:
+  ```bash
+  python manage.py star_template website landing --html5
+  ```
+* **Flat Templates (`--flat`)**:
+  Drops the template directly into `<app>/templates/<template>.html` without the app-named subfolder:
+  ```bash
+  python manage.py star_template website footer --flat
+  ```
+* **Custom Block Name (`--block`)**:
+  Overrides the primary block name (defaults to `content`):
+  ```bash
+  python manage.py star_template website profile -e base --block main_content
+  ```
+* **Overwrite Protection (`-f` / `--force`)**:
+  Skips existing templates by default to protect your code. Use `-f` or `--force` to overwrite.
+
+---
+
 ## License
 
-MIT
+MIT

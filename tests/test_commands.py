@@ -15,6 +15,7 @@ from django_star.management.commands.star_admin import Command as StarAdminComma
 from django_star.management.commands.star_serializer import Command as StarSerializerCommand
 from django_star.management.commands.star_schema import Command as StarSchemaCommand
 from django_star.management.commands.star_theme import Command as StarThemeCommand
+from django_star.management.commands.star_template import Command as StarTemplateCommand
 
 
 class DjangoStarEdgeCaseTests(unittest.TestCase):
@@ -31,6 +32,7 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
             "star_serializer",
             "star_schema",
             "star_theme",
+            "star_template",
         ]
         for cmd in expected:
             self.assertIn(cmd, commands, f"Command {cmd} should be registered")
@@ -524,6 +526,175 @@ urlpatterns = [
             updated = urls_file.read_text(encoding="utf-8")
             self.assertIn("from django.urls import path, include", updated)
             self.assertIn('path("grappelli/", include("grappelli.urls"))', updated)
+
+    def test_star_template_default_namespaced(self):
+        cmd = StarTemplateCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_config = MagicMock()
+            mock_config.label = "main"
+            mock_config.path = tmpdir
+
+            with patch("django_star.management.commands.star_template.apps.get_app_config", return_value=mock_config):
+                cmd.handle(
+                    app_name="main",
+                    template_name="index",
+                    extends=None,
+                    html5=False,
+                    flat=False,
+                    block="content",
+                    force=False,
+                )
+
+            target = Path(tmpdir) / "templates" / "main" / "index.html"
+            self.assertTrue(target.exists())
+            content = target.read_text(encoding="utf-8")
+            self.assertIn("{% block content %}", content)
+            self.assertIn("main-index", content)
+
+    def test_star_template_with_extends(self):
+        cmd = StarTemplateCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_config = MagicMock()
+            mock_config.label = "main"
+            mock_config.path = tmpdir
+
+            with patch("django_star.management.commands.star_template.apps.get_app_config", return_value=mock_config):
+                cmd.handle(
+                    app_name="main",
+                    template_name="dashboard.html",
+                    extends="base",
+                    html5=False,
+                    flat=False,
+                    block="body",
+                    force=False,
+                )
+
+            target = Path(tmpdir) / "templates" / "main" / "dashboard.html"
+            self.assertTrue(target.exists())
+            content = target.read_text(encoding="utf-8")
+            self.assertIn('{% extends "base.html" %}', content)
+            self.assertIn("{% block body %}", content)
+            self.assertIn("Main - Dashboard", content)
+
+    def test_star_template_with_html5(self):
+        cmd = StarTemplateCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_config = MagicMock()
+            mock_config.label = "main"
+            mock_config.path = tmpdir
+
+            with patch("django_star.management.commands.star_template.apps.get_app_config", return_value=mock_config):
+                cmd.handle(
+                    app_name="main",
+                    template_name="landing",
+                    extends=None,
+                    html5=True,
+                    flat=False,
+                    block="content",
+                    force=False,
+                )
+
+            target = Path(tmpdir) / "templates" / "main" / "landing.html"
+            self.assertTrue(target.exists())
+            content = target.read_text(encoding="utf-8")
+            self.assertIn("<!DOCTYPE html>", content)
+            self.assertIn('<html lang="en">', content)
+            self.assertIn("{% block content %}", content)
+
+    def test_star_template_flat_flag(self):
+        cmd = StarTemplateCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_config = MagicMock()
+            mock_config.label = "main"
+            mock_config.path = tmpdir
+
+            with patch("django_star.management.commands.star_template.apps.get_app_config", return_value=mock_config):
+                cmd.handle(
+                    app_name="main",
+                    template_name="header.html",
+                    extends=None,
+                    html5=False,
+                    flat=True,
+                    block="content",
+                    force=False,
+                )
+
+            # In flat mode, should be directly in templates/header.html
+            target = Path(tmpdir) / "templates" / "header.html"
+            self.assertTrue(target.exists())
+            namespaced = Path(tmpdir) / "templates" / "main" / "header.html"
+            self.assertFalse(namespaced.exists())
+
+    def test_star_template_nested_subpath(self):
+        cmd = StarTemplateCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_config = MagicMock()
+            mock_config.label = "auth"
+            mock_config.path = tmpdir
+
+            with patch("django_star.management.commands.star_template.apps.get_app_config", return_value=mock_config):
+                cmd.handle(
+                    app_name="auth",
+                    template_name="emails/welcome",
+                    extends=None,
+                    html5=False,
+                    flat=False,
+                    block="content",
+                    force=False,
+                )
+
+            target = Path(tmpdir) / "templates" / "auth" / "emails" / "welcome.html"
+            self.assertTrue(target.exists())
+
+    def test_star_template_force_overwrite(self):
+        cmd = StarTemplateCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_config = MagicMock()
+            mock_config.label = "main"
+            mock_config.path = tmpdir
+
+            target = Path(tmpdir) / "templates" / "main" / "existing.html"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("ORIGINAL CONTENT", encoding="utf-8")
+
+            with patch("django_star.management.commands.star_template.apps.get_app_config", return_value=mock_config):
+                # Without force: should NOT overwrite
+                cmd.handle(
+                    app_name="main",
+                    template_name="existing.html",
+                    extends=None,
+                    html5=False,
+                    flat=False,
+                    block="content",
+                    force=False,
+                )
+                self.assertEqual(target.read_text(encoding="utf-8"), "ORIGINAL CONTENT")
+
+                # With force: SHOULD overwrite
+                cmd.handle(
+                    app_name="main",
+                    template_name="existing.html",
+                    extends=None,
+                    html5=True,
+                    flat=False,
+                    block="content",
+                    force=True,
+                )
+                self.assertIn("<!DOCTYPE html>", target.read_text(encoding="utf-8"))
+
+    def test_star_template_invalid_app_raises_command_error(self):
+        cmd = StarTemplateCommand()
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            cmd.handle(
+                app_name="nonexistent_app_xyz",
+                template_name="index",
+                extends=None,
+                html5=False,
+                flat=False,
+                block="content",
+                force=False,
+            )
 
 
 if __name__ == "__main__":

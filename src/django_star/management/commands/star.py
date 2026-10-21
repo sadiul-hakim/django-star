@@ -27,6 +27,11 @@ COMMANDS_REGISTRY = [
                 "args": "<app_name> <command_name>",
                 "desc": "Generates BaseCommand skeleton under management/commands/.",
             },
+            {
+                "name": "star_template",
+                "args": "<app_name> <template> [-e] [--html5] [--flat]",
+                "desc": "Scaffolds namespaced HTML template with inheritance or HTML5 options.",
+            },
         ],
     },
     {
@@ -85,6 +90,7 @@ class Command(BaseCommand):
         console.print()
 
         # 2. Command Categories (Clean Artisan-style grouping)
+        seen_commands = set()
         for group in COMMANDS_REGISTRY:
             console.print(f"[bold magenta]{group['category'].upper()}[/bold magenta]")
             table = Table(
@@ -95,11 +101,13 @@ class Command(BaseCommand):
                 expand=False,
             )
             table.add_column("Command", style="bold cyan", width=18, no_wrap=True)
-            table.add_column("Arguments", style="yellow", width=38, no_wrap=True)
+            table.add_column("Arguments", style="yellow")
             table.add_column("Description", style="bright_white")
 
-
             for cmd in group["commands"]:
+                if cmd["name"] in seen_commands:
+                    continue
+                seen_commands.add(cmd["name"])
                 table.add_row(f"  {cmd['name']}", cmd["args"], cmd["desc"])
 
             console.print(table)
