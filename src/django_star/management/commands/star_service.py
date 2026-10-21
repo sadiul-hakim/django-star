@@ -1,9 +1,7 @@
 from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.apps import apps
-from rich.console import Console
-
-console = Console()
+from django_star.console import console
 
 SERVICE_TEMPLATE = '''"""
 {service_name} business logic service.

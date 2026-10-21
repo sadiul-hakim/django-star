@@ -3,9 +3,8 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.apps import apps
 from django.conf import settings
-from rich.console import Console
-
-console = Console()
+from django_star.console import console
+from django_star.utils import create_backup, safe_insert_into_collection
 
 APP_URLS_TEMPLATE = """from django.urls import path
 from . import views
@@ -55,19 +54,21 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        app_label = options["app_name"].lower()
-        route_prefix = options["prefix"] or app_label
-        skip_template = options["no_template"]
+        raw_app_name = options["app_name"]
 
         # 1. Verify app exists in INSTALLED_APPS
         try:
-            app_config = apps.get_app_config(app_label)
+            app_config = apps.get_app_config(raw_app_name)
         except LookupError:
             raise CommandError(
-                f"Application '{app_label}' is not in INSTALLED_APPS. "
+                f"Application '{raw_app_name}' is not in INSTALLED_APPS. "
                 f"Please add it to settings.py first."
             )
 
+        app_label = app_config.label
+        app_module = app_config.name
+        route_prefix = (options["prefix"] or app_label).strip("/")
+        skip_template = options["no_template"]
         app_dir = Path(app_config.path)
 
         # 2. Generate <app>/urls.py if missing
@@ -105,59 +106,66 @@ class Command(BaseCommand):
                 )
 
         # 4. Wire route inside Root urls.py
-        self._wire_root_urls(app_label, route_prefix.strip("/"))
+        self._wire_root_urls(app_module, route_prefix)
 
-    def _wire_root_urls(self, app_name: str, route_prefix: str):
+    def _wire_root_urls(self, app_module: str, route_prefix: str):
         root_urlconf = getattr(settings, "ROOT_URLCONF", None)
         if not root_urlconf:
-            console.print("[bold red]✖ ROOT_URLCONF not found in settings.[/bold red]")
+            console.print(
+                f"[bold yellow]⚠ ROOT_URLCONF not found in settings.[/bold yellow]\n"
+                f"[yellow]Please add route manually to urlpatterns:[/yellow]\n"
+                f'    path("{route_prefix}/", include("{app_module}.urls")),'
+            )
             return
 
         base_dir = Path(settings.BASE_DIR)
         root_urls_path = base_dir / (root_urlconf.replace(".", "/") + ".py")
         if not root_urls_path.exists():
             console.print(
-                f"[bold red]✖ Root url file not found at {root_urls_path}[/bold red]"
+                f"[bold yellow]⚠ Root url file not found at {root_urls_path}.[/bold yellow]\n"
+                f"[yellow]Please add route manually to urlpatterns:[/yellow]\n"
+                f'    path("{route_prefix}/", include("{app_module}.urls")),'
             )
             return
 
         content = root_urls_path.read_text(encoding="utf-8")
 
         # Check if already included
-        route_signature = f'"{app_name}.urls"'
-        alt_signature = f"'{app_name}.urls'"
+        route_signature = f'"{app_module}.urls"'
+        alt_signature = f"'{app_module}.urls'"
         if route_signature in content or alt_signature in content:
             console.print(
-                f"[bold yellow]⚠ '{app_name}.urls' is already mounted in {root_urls_path.name}.[/bold yellow]"
+                f"[bold yellow]⚠ '{app_module}.urls' is already mounted in {root_urls_path.name}.[/bold yellow]"
             )
             return
 
+        create_backup(root_urls_path)
+
         # 1. Ensure 'include' is imported from django.urls
         if "include" not in content:
-            content = re.sub(
-                r"from django\.urls import ([\w\s,]+)",
-                r"from django.urls import \1, include",
-                content,
-                count=1,
-            )
+            if re.search(r"from django\.urls import ([^\n\r]+)", content):
+                content = re.sub(
+                    r"from django\.urls import ([^\n\r]+)",
+                    r"from django.urls import \1, include",
+                    content,
+                    count=1,
+                )
+            else:
+                content = "from django.urls import include\n" + content
 
         # 2. Append route to urlpatterns
-        new_route = f'    path("{route_prefix}/", include("{app_name}.urls")),\n'
-        pattern = r"(urlpatterns\s*=\s*\[)([\s\S]*?)(\])"
-        match = re.search(pattern, content)
+        new_route = f'    path("{route_prefix}/", include("{app_module}.urls")),\n'
+        updated = safe_insert_into_collection(content, "urlpatterns", new_route)
 
-        if match:
-            head, body, tail = match.group(1), match.group(2), match.group(3)
-            new_urlpatterns = f"{head}{body}{new_route}{tail}"
-            content = (
-                content[: match.start()] + new_urlpatterns + content[match.end() :]
-            )
-            root_urls_path.write_text(content, encoding="utf-8")
+        if updated is not None:
+            root_urls_path.write_text(updated, encoding="utf-8")
             console.print(
                 f"[bold green]✔ Mounted[/bold green] [cyan]/{route_prefix}/[/cyan] "
-                f"$\to$ [white]{root_urls_path.name}[/white]"
+                f"-> [white]{root_urls_path.name}[/white]"
             )
         else:
             console.print(
-                "[bold yellow]⚠ Could not find 'urlpatterns = [...]' block in root urls.py[/bold yellow]"
+                f"[bold yellow]⚠ Could not safely insert route into {root_urls_path.name} automatically.[/bold yellow]\n"
+                f"[yellow]Please add the following route manually to urlpatterns:[/yellow]\n"
+                f'    path("{route_prefix}/", include("{app_module}.urls")),'
             )

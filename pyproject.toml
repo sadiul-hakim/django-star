@@ -25,6 +25,14 @@ dependencies = [
     "rich>=13.0.0",
 ]
 
+[project.optional-dependencies]
+drf = ["djangorestframework>=3.14.0"]
+ninja = ["django-ninja>=1.0.0"]
+all = [
+    "djangorestframework>=3.14.0",
+    "django-ninja>=1.0.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/sadiul-hakim/django-star"
 Issues = "https://github.com/sadiul-hakim/django-star/issues"

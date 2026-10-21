@@ -2,9 +2,8 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.apps import apps
 from django.db import models
-from rich.console import Console
-
-console = Console()
+from django_star.console import console
+from django_star.utils import create_backup
 
 
 class Command(BaseCommand):
@@ -57,11 +56,37 @@ class Command(BaseCommand):
                     f"Could not find model '{model_name}' in app '{app_label}'."
                 )
 
+        # Filter out abstract models and auto-created join tables
+        filtered_models = []
+        for model in target_models:
+            if getattr(model._meta, "abstract", False):
+                if not process_all:
+                    console.print(
+                        f"[bold yellow]⚠ Model '{model.__name__}' is abstract and cannot be registered in admin. Skipping.[/bold yellow]"
+                    )
+                continue
+            if getattr(model._meta, "auto_created", False):
+                if not process_all:
+                    console.print(
+                        f"[bold yellow]⚠ Model '{model.__name__}' is auto-created. Skipping.[/bold yellow]"
+                    )
+                continue
+            filtered_models.append(model)
+        target_models = filtered_models
+
+        if not target_models:
+            console.print(
+                f"[bold yellow]No eligible models found in '{app_label}'.[/bold yellow]"
+            )
+            return
+
         admin_file = Path(app_config.path) / "admin.py"
         if not admin_file.exists():
             admin_file.write_text(
                 "from django.contrib import admin\n", encoding="utf-8"
             )
+        else:
+            create_backup(admin_file)
 
         existing_content = admin_file.read_text(encoding="utf-8")
 

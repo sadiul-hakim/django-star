@@ -1,9 +1,7 @@
 from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.apps import apps
-from rich.console import Console
-
-console = Console()
+from django_star.console import console
 
 COMMAND_TEMPLATE = """from django.core.management.base import BaseCommand
 from rich.console import Console

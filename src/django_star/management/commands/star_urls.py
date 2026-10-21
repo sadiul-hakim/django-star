@@ -1,9 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.urls import get_resolver, URLPattern, URLResolver
-from rich.console import Console
 from rich.table import Table
-
-console = Console()
+from django_star.console import console
 
 
 class Command(BaseCommand):

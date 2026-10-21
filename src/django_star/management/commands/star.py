@@ -1,9 +1,7 @@
 from django.core.management.base import BaseCommand
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-
-console = Console()
+from django_star.console import console
 
 COMMANDS_REGISTRY = [
     {
@@ -11,7 +9,7 @@ COMMANDS_REGISTRY = [
         "commands": [
             {
                 "name": "star_app",
-                "args": "<app_name>",
+                "args": "<app_name> [--dir]",
                 "desc": "Scaffolds a new app and auto-wires settings.py, app urls.py, and root urls.py in one step.",
             },
             {

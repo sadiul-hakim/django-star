@@ -1,10 +1,10 @@
+import importlib.util
 from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.apps import apps
 from django.db import models
-from rich.console import Console
-
-console = Console()
+from django_star.console import console
+from django_star.utils import create_backup
 
 FIELD_TYPE_MAP = {
     models.AutoField: "int",
@@ -58,6 +58,13 @@ class Command(BaseCommand):
         model_name = options["model_name"]
         process_all = options["all"] or (model_name is None)
 
+        # Check for ninja dependency
+        if importlib.util.find_spec("ninja") is None:
+            console.print(
+                "[bold yellow]⚠ 'ninja' is not installed in your Python environment. "
+                "Install it via: pip install \"django-star\\[ninja]\" or pip install django-ninja[/bold yellow]"
+            )
+
         try:
             app_config = apps.get_app_config(app_label)
         except LookupError:
@@ -80,11 +87,37 @@ class Command(BaseCommand):
                     f"Could not find model '{model_name}' in app '{app_label}'."
                 )
 
+        # Filter out abstract models and auto-created join tables
+        filtered_models = []
+        for model in target_models:
+            if getattr(model._meta, "abstract", False):
+                if not process_all:
+                    console.print(
+                        f"[bold yellow]⚠ Model '{model.__name__}' is abstract. Skipping schema generation.[/bold yellow]"
+                    )
+                continue
+            if getattr(model._meta, "auto_created", False):
+                if not process_all:
+                    console.print(
+                        f"[bold yellow]⚠ Model '{model.__name__}' is auto-created. Skipping schema generation.[/bold yellow]"
+                    )
+                continue
+            filtered_models.append(model)
+        target_models = filtered_models
+
+        if not target_models:
+            console.print(
+                f"[bold yellow]No eligible models found in '{app_label}'.[/bold yellow]"
+            )
+            return
+
         target_file = Path(app_config.path) / "schemas.py"
         needed_typing = set()
 
         if not target_file.exists():
             target_file.write_text("from ninja import Schema\n", encoding="utf-8")
+        else:
+            create_backup(target_file)
 
         existing_content = target_file.read_text(encoding="utf-8")
         generated_names = []

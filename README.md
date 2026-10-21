@@ -28,15 +28,18 @@ Artisan-style developer automation, route inspection, and code generators for Dj
 Install directly into your active virtual environment:
 
 ```bash
-pip install git+https://github.com/your-username/django-star.git
+pip install git+https://github.com/sadiul-hakim/django-star.git
 
+# With optional framework extras:
+pip install "django-star[drf] @ git+https://github.com/sadiul-hakim/django-star.git"
+pip install "django-star[ninja] @ git+https://github.com/sadiul-hakim/django-star.git"
+pip install "django-star[all] @ git+https://github.com/sadiul-hakim/django-star.git"
 ```
 
 Or add it to your `requirements.txt`:
 
 ```text
-django-star @ git+https://github.com/your-username/django-star.git@main
-
+django-star @ git+https://github.com/sadiul-hakim/django-star.git@main
 ```
 
 ### Local Development (Editable Mode)
@@ -44,6 +47,8 @@ django-star @ git+https://github.com/your-username/django-star.git@main
 ```bash
 pip install -e /path/to/django-star
 
+# With optional framework extras:
+pip install -e "/path/to/django-star[all]"
 ```
 
 ---
@@ -102,11 +107,14 @@ python manage.py star_urls -e admin __debug__
 
 ### 2. Zero-Wiring App Generator (`star_app`)
 
-Runs `startapp`, registers the app in `settings.py`, generates `urls.py`, and mounts the route inside root `urls.py` in one step:
+Runs `startapp`, registers the app in `settings.py`, generates `urls.py`, and mounts the route inside root `urls.py` in one step. Automatically creates `.bak` backups before modifying any files:
 
 ```bash
+# Standard layout (app created at project root)
 python manage.py star_app billing
 
+# Custom subdirectory layout (e.g. apps/billing or src/billing)
+python manage.py star_app billing --dir apps/
 ```
 
 ---
