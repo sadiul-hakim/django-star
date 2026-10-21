@@ -51,6 +51,21 @@ COMMANDS_REGISTRY = [
             },
         ],
     },
+    {
+        "category": "API & Serialization",
+        "commands": [
+            {
+                "name": "star_serializer",
+                "args": "<app_name> [model_name] [--all]",
+                "desc": "Inspects models and auto-generates DRF ModelSerializer classes in <app>/serializers.py.",
+            },
+            {
+                "name": "star_schema",
+                "args": "<app_name> [model_name] [--all]",
+                "desc": "Inspects models and auto-generates Django Ninja In and Out schemas in <app>/schemas.py.",
+            },
+        ],
+    },
 ]
 
 
