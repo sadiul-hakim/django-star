@@ -4,7 +4,11 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 from django_star.console import console
-from django_star.utils import create_backup, safe_insert_into_collection
+from django_star.utils import (
+    create_backup,
+    locate_settings_file,
+    safe_insert_into_collection,
+)
 
 APP_URLS_TEMPLATE = """from django.urls import path
 # from . import views
@@ -190,33 +194,7 @@ class Command(BaseCommand):
     @staticmethod
     def _locate_settings_file():
         settings_module = getattr(settings, "SETTINGS_MODULE", None)
-        if not settings_module:
-            return None
+        base_dir = getattr(settings, "BASE_DIR", None)
+        return locate_settings_file(base_dir=base_dir, settings_module=settings_module)
 
-        base_dir = Path(settings.BASE_DIR)
-        module_rel_path = settings_module.replace(".", "/")
 
-        # 1. Direct file match: e.g. config/settings.py
-        candidate = base_dir / f"{module_rel_path}.py"
-        if candidate.exists():
-            if "INSTALLED_APPS" in candidate.read_text(encoding="utf-8"):
-                return candidate
-            parent_dir = candidate.parent
-            for fname in ["base.py", "common.py", "__init__.py"]:
-                sf = parent_dir / fname
-                if sf.exists() and "INSTALLED_APPS" in sf.read_text(encoding="utf-8"):
-                    return sf
-            return candidate
-
-        # 2. Package / directory match: e.g. config/settings/
-        dir_candidate = base_dir / module_rel_path
-        if dir_candidate.is_dir():
-            for fname in ["base.py", "common.py", "__init__.py", "local.py", "dev.py"]:
-                sf = dir_candidate / fname
-                if sf.exists() and "INSTALLED_APPS" in sf.read_text(encoding="utf-8"):
-                    return sf
-            for py_file in dir_candidate.glob("*.py"):
-                if "INSTALLED_APPS" in py_file.read_text(encoding="utf-8"):
-                    return py_file
-
-        return None

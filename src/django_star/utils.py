@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from django.conf import settings
 from django_star.console import console
 
 
@@ -55,3 +56,144 @@ def safe_insert_into_collection(content: str, variable_name: str, new_entry: str
         entry = "\n" + entry
 
     return f"{head}{body}{entry}{tail}"
+
+
+def locate_settings_file(
+    base_dir: Path | str | None = None, settings_module: str | None = None
+) -> Path | None:
+    """
+    Discovers the active Django settings file (e.g. settings.py, config/settings/base.py).
+    """
+    if settings_module is None:
+        settings_module = getattr(settings, "SETTINGS_MODULE", None)
+    if not settings_module:
+        return None
+
+    if base_dir is None:
+        base_dir = getattr(settings, "BASE_DIR", None)
+    if not base_dir:
+        return None
+
+    base_dir = Path(base_dir)
+    module_rel_path = settings_module.replace(".", "/")
+
+    # 1. Direct file match: e.g. config/settings.py
+    candidate = base_dir / f"{module_rel_path}.py"
+    if candidate.exists():
+        if "INSTALLED_APPS" in candidate.read_text(encoding="utf-8"):
+            return candidate
+        parent_dir = candidate.parent
+        for fname in ["base.py", "common.py", "__init__.py"]:
+            sf = parent_dir / fname
+            if sf.exists() and "INSTALLED_APPS" in sf.read_text(encoding="utf-8"):
+                return sf
+        return candidate
+
+    # 2. Package / directory match: e.g. config/settings/
+    dir_candidate = base_dir / module_rel_path
+    if dir_candidate.is_dir():
+        for fname in ["base.py", "common.py", "__init__.py", "local.py", "dev.py"]:
+            sf = dir_candidate / fname
+            if sf.exists() and "INSTALLED_APPS" in sf.read_text(encoding="utf-8"):
+                return sf
+        for py_file in dir_candidate.glob("*.py"):
+            if "INSTALLED_APPS" in py_file.read_text(encoding="utf-8"):
+                return py_file
+
+    return None
+
+
+
+def locate_root_urls_file() -> Path | None:
+    """
+    Discovers the project's root urls.py file from ROOT_URLCONF.
+    """
+    root_urlconf = getattr(settings, "ROOT_URLCONF", None)
+    if not root_urlconf:
+        return None
+    base_dir = Path(settings.BASE_DIR)
+    root_urls_path = base_dir / (root_urlconf.replace(".", "/") + ".py")
+    if root_urls_path.exists():
+        return root_urls_path
+    return None
+
+
+def update_theme_in_settings(
+    content: str,
+    new_theme_apps: list[str] | None,
+    all_theme_apps: set[str],
+) -> tuple[str | None, list[str]]:
+    """
+    Safely replaces or removes third-party admin theme apps in INSTALLED_APPS.
+    The new theme apps are positioned immediately before 'django.contrib.admin'.
+    Returns (updated_content, list_of_removed_apps).
+    """
+    pattern = r"(INSTALLED_APPS\s*=\s*(\[|\())"
+    match = re.search(pattern, content)
+    if not match:
+        return None, []
+
+    open_char = match.group(2)
+    close_char = "]" if open_char == "[" else ")"
+    start_idx = match.end() - 1
+    depth = 0
+    close_idx = None
+
+    for i in range(start_idx, len(content)):
+        char = content[i]
+        if char == open_char:
+            depth += 1
+        elif char == close_char:
+            depth -= 1
+            if depth == 0:
+                close_idx = i
+                break
+
+    if close_idx is None:
+        return None, []
+
+    head = content[: match.end()]
+    body = content[match.end() : close_idx]
+    tail = content[close_idx:]
+
+    theme_pattern = rf"['\"]({'|'.join(re.escape(a) for a in all_theme_apps)})['\"]"
+
+    removed_apps = []
+    lines = body.splitlines(keepends=True)
+    kept_lines = []
+
+    for line in lines:
+        m = re.search(theme_pattern, line)
+        if m:
+            removed_apps.append(m.group(1))
+        else:
+            kept_lines.append(line)
+
+    if new_theme_apps:
+        admin_idx = None
+        indent = "    "
+        quote = '"'
+
+        for idx, line in enumerate(kept_lines):
+            admin_match = re.search(r"([ \t]*)['\"]django\.contrib\.admin['\"]", line)
+            if admin_match:
+                admin_idx = idx
+                indent = admin_match.group(1) or "    "
+                if "'django.contrib.admin'" in line:
+                    quote = "'"
+                break
+
+        new_entries = [f"{indent}{quote}{app}{quote},\n" for app in new_theme_apps]
+        new_block = "".join(new_entries)
+
+        if admin_idx is not None:
+            kept_lines.insert(admin_idx, new_block)
+        else:
+            if kept_lines and not kept_lines[0].startswith("\n"):
+                kept_lines.insert(0, "\n" + new_block)
+            else:
+                kept_lines.insert(0, new_block)
+
+    new_body = "".join(kept_lines)
+    return f"{head}{new_body}{tail}", removed_apps
+

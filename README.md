@@ -9,7 +9,9 @@ Artisan-style developer automation, route inspection, and code generators for Dj
 ## Features
 
 * **Interactive Command Catalog (`star`)**: Built-in dashboard listing all available tools, syntax, and categories.
+* **Admin Theme Manager (`star_theme`)**: One-click installation and configuration for top Django admin themes (`django-grappelli`, `django-simpleui`, `django-admin-interface`, `django-jazzmin`) with automatic dependency installation, settings.py injection, route management, and seamless theme switching.
 * **Automated `admin.py` Generation (`star_admin`)**: Reflects on Django ORM models and automatically configures `list_display`, `search_fields`, and `list_filter` for single models or an entire app at once.
+
 * **Route Inspector (`star_urls`)**: Interactive terminal table displaying all registered URL patterns, callback views, and namespaces with search filters and app exclusion (`-e`).
 * **Zero-Wiring App Generator (`star_app`)**: Scaffolds a new app, registers it in `settings.py` (`INSTALLED_APPS`), creates `urls.py`, and mounts it directly into root `urls.py`.
 * **Existing App Route & Template Wiring (`star_route`)**: Wires up pre-existing apps by generating `urls.py`, default HTML templates, and mounting routes in root `urls.py`.
@@ -152,7 +154,30 @@ python manage.py star_admin blog
 
 ---
 
-### 5. DRF Serializer Generator (`star_serializer`)
+### 5. Admin Theme Manager (`star_theme`)
+
+Instantly switch between popular Django admin themes without manually touching `admin.py`. Automatically handles `pip install`, `INSTALLED_APPS` replacement, `X_FRAME_OPTIONS`, route wiring, and database migrations:
+
+```bash
+# Interactive selection dashboard
+python manage.py star_theme
+
+# View active theme status
+python manage.py star_theme --list
+
+# Switch directly by name or rank number
+python manage.py star_theme jazzmin
+python manage.py star_theme simpleui
+python manage.py star_theme grappelli
+python manage.py star_theme admin_interface
+
+# Reset to default stock Django admin
+python manage.py star_theme --remove
+```
+
+---
+
+### 6. DRF Serializer Generator (`star_serializer`)
 
 Auto-generates `serializers.ModelSerializer` classes inside `<app>/serializers.py`:
 
@@ -167,7 +192,7 @@ python manage.py star_serializer blog
 
 ---
 
-### 6. Django Ninja Schema Generator (`star_schema`)
+### 7. Django Ninja Schema Generator (`star_schema`)
 
 Maps ORM fields to Python types and creates `ModelIn` and `ModelOut` schemas in `<app>/schemas.py`:
 
@@ -182,7 +207,7 @@ python manage.py star_schema blog
 
 ---
 
-### 7. Scaffold a Service Layer (`star_service`)
+### 8. Scaffold a Service Layer (`star_service`)
 
 Creates a service module inside `<app>/services/<name>_service.py` wrapped with `@transaction.atomic`:
 
@@ -193,7 +218,8 @@ python manage.py star_service billing process_payment
 
 ---
 
-### 8. Scaffold a Management Command (`star_command`)
+### 9. Scaffold a Management Command (`star_command`)
+
 
 Sets up nested directory paths (`<app>/management/commands/`), `__init__.py` files, and a ready-to-run command skeleton:
 

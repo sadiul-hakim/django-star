@@ -10,22 +10,22 @@ COMMANDS_REGISTRY = [
             {
                 "name": "star_app",
                 "args": "<app_name> [--dir]",
-                "desc": "Scaffolds a new app and auto-wires settings.py, app urls.py, and root urls.py in one step.",
+                "desc": "Scaffolds a new app and auto-wires settings, urls & root urls.",
             },
             {
                 "name": "star_route",
                 "args": "<app_name> [--prefix] [--no-template]",
-                "desc": "Wires up existing apps: creates urls.py, templates folder, and mounts route in root urls.py.",
+                "desc": "Wires existing app: creates urls.py, templates & root route.",
             },
             {
                 "name": "star_service",
                 "args": "<app_name> <service_name>",
-                "desc": "Generates a clean architecture service layer with transaction and logging boilerplate.",
+                "desc": "Scaffolds service layer with @transaction.atomic and logging.",
             },
             {
                 "name": "star_command",
                 "args": "<app_name> <command_name>",
-                "desc": "Generates a complete BaseCommand skeleton under <app>/management/commands/.",
+                "desc": "Generates BaseCommand skeleton under management/commands/.",
             },
         ],
     },
@@ -34,8 +34,13 @@ COMMANDS_REGISTRY = [
         "commands": [
             {
                 "name": "star_admin",
-                "args": "<app_name> [model_name] [--all]",
-                "desc": "Inspects ORM models and auto-generates ModelAdmin classes with search_fields and list_filter.",
+                "args": "<app_name> [model] [--all]",
+                "desc": "Auto-generates ModelAdmin with search_fields and list_filter.",
+            },
+            {
+                "name": "star_theme",
+                "args": "[theme] [--remove] [--no-pip]",
+                "desc": "Installs & configures admin themes (jazzmin, simpleui, etc.).",
             },
         ],
     },
@@ -45,7 +50,7 @@ COMMANDS_REGISTRY = [
             {
                 "name": "star_urls",
                 "args": "[filter] [-e/--exclude app ...]",
-                "desc": "Displays an interactive table of all registered URLs, callback views, and namespaces.",
+                "desc": "Displays interactive table of registered URLs & callback views.",
             },
         ],
     },
@@ -54,13 +59,13 @@ COMMANDS_REGISTRY = [
         "commands": [
             {
                 "name": "star_serializer",
-                "args": "<app_name> [model_name] [--all]",
-                "desc": "Inspects models and auto-generates DRF ModelSerializer classes in <app>/serializers.py.",
+                "args": "<app_name> [model] [--all]",
+                "desc": "Auto-generates DRF ModelSerializer classes in serializers.py.",
             },
             {
                 "name": "star_schema",
-                "args": "<app_name> [model_name] [--all]",
-                "desc": "Inspects models and auto-generates Django Ninja In and Out schemas in <app>/schemas.py.",
+                "args": "<app_name> [model] [--all]",
+                "desc": "Auto-generates Django Ninja In and Out schema classes.",
             },
         ],
     },
@@ -73,32 +78,34 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # 1. Header Banner
         banner = (
-            "[bold green]Django Star[/bold green] [dim]— Modern Developer Automation for Django[/dim]\n"
+            "[bold green]Django Star[/bold green] [dim]-- Modern Developer Automation for Django[/dim]\n"
             "[cyan]Run any command using:[/cyan] [bold white]python manage.py <command>[/bold white]"
         )
         console.print(Panel(banner, border_style="green", expand=False))
         console.print()
 
-        # 2. Command Categories Table
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            border_style="dim",
-            expand=True,
-        )
-        table.add_column("Command", style="bold cyan", width=18)
-        table.add_column("Arguments / Flags", style="yellow", width=36)
-        table.add_column("Description", style="white")
-
+        # 2. Command Categories (Clean Artisan-style grouping)
         for group in COMMANDS_REGISTRY:
-            # Group separator
-            table.add_section()
-            table.add_row(f"[bold green]▶ {group['category']}[/bold green]", "", "")
-            for cmd in group["commands"]:
-                table.add_row(cmd["name"], cmd["args"], cmd["desc"])
+            console.print(f"[bold magenta]{group['category'].upper()}[/bold magenta]")
+            table = Table(
+                box=None,
+                show_header=False,
+                pad_edge=False,
+                padding=(0, 2),
+                expand=False,
+            )
+            table.add_column("Command", style="bold cyan", width=18, no_wrap=True)
+            table.add_column("Arguments", style="yellow", width=38, no_wrap=True)
+            table.add_column("Description", style="bright_white")
 
-        console.print(table)
-        console.print()
+
+            for cmd in group["commands"]:
+                table.add_row(f"  {cmd['name']}", cmd["args"], cmd["desc"])
+
+            console.print(table)
+            console.print()
+
         console.print(
             "[dim]Tip: Add '--help' to any specific command for detailed argument flags (e.g. python manage.py star_urls --help)[/dim]"
         )
+

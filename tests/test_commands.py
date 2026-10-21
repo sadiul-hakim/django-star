@@ -9,6 +9,7 @@ from django_star.management.commands.star_route import Command as StarRouteComma
 from django_star.management.commands.star_admin import Command as StarAdminCommand
 from django_star.management.commands.star_serializer import Command as StarSerializerCommand
 from django_star.management.commands.star_schema import Command as StarSchemaCommand
+from django_star.management.commands.star_theme import Command as StarThemeCommand
 
 
 class DjangoStarEdgeCaseTests(unittest.TestCase):
@@ -24,9 +25,11 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
             "star_urls",
             "star_serializer",
             "star_schema",
+            "star_theme",
         ]
         for cmd in expected:
             self.assertIn(cmd, commands, f"Command {cmd} should be registered")
+
 
     def test_safe_insert_into_collection_lists_and_tuples(self):
         # 1. Standard list
@@ -275,6 +278,125 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
                     urls_content = urls_file.read_text(encoding="utf-8")
                     self.assertIn('include("apps.billing.urls")', urls_content)
 
+    def test_star_theme_switch_to_jazzmin(self):
+        cmd = StarThemeCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            settings_file = base_dir / "settings.py"
+            initial_content = 'INSTALLED_APPS = [\n    "django.contrib.admin",\n    "django.contrib.auth",\n]\n'
+            settings_file.write_text(initial_content, encoding="utf-8")
+
+            with patch("django_star.management.commands.star_theme.locate_settings_file", return_value=settings_file):
+                with patch.object(cmd, "_ensure_package_installed", return_value=True):
+                    cmd.handle(theme="jazzmin", remove=False, no_pip=True, list=False, yes=True)
+
+            updated = settings_file.read_text(encoding="utf-8")
+            self.assertIn('"jazzmin",\n    "django.contrib.admin",', updated)
+            self.assertTrue((base_dir / "settings.py.bak").exists())
+
+    def test_star_theme_replaces_existing_theme(self):
+        cmd = StarThemeCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            settings_file = base_dir / "settings.py"
+            initial_content = 'INSTALLED_APPS = [\n    "simpleui",\n    "django.contrib.admin",\n]\n'
+            settings_file.write_text(initial_content, encoding="utf-8")
+
+            with patch("django_star.management.commands.star_theme.locate_settings_file", return_value=settings_file):
+                with patch.object(cmd, "_ensure_package_installed", return_value=True):
+                    cmd.handle(theme="jazzmin", remove=False, no_pip=True, list=False, yes=True)
+
+            updated = settings_file.read_text(encoding="utf-8")
+            self.assertNotIn("simpleui", updated)
+            self.assertIn('"jazzmin",\n    "django.contrib.admin",', updated)
+
+    def test_star_theme_admin_interface_adds_colorfield_and_x_frame(self):
+        cmd = StarThemeCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            settings_file = base_dir / "settings.py"
+            initial_content = 'INSTALLED_APPS = [\n    "django.contrib.admin",\n]\n'
+            settings_file.write_text(initial_content, encoding="utf-8")
+
+            with patch("django_star.management.commands.star_theme.locate_settings_file", return_value=settings_file):
+                with patch.object(cmd, "_ensure_package_installed", return_value=True):
+                    with patch("django_star.management.commands.star_theme.call_command"):
+                        cmd.handle(theme="admin_interface", remove=False, no_pip=True, list=False, yes=True)
+
+            updated = settings_file.read_text(encoding="utf-8")
+            self.assertIn('"admin_interface",\n    "colorfield",\n    "django.contrib.admin",', updated)
+            self.assertIn('X_FRAME_OPTIONS = "SAMEORIGIN"', updated)
+
+    def test_star_theme_switch_from_admin_interface_to_simpleui(self):
+        cmd = StarThemeCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            settings_file = base_dir / "settings.py"
+            initial_content = 'INSTALLED_APPS = [\n    "admin_interface",\n    "colorfield",\n    "django.contrib.admin",\n]\n'
+            settings_file.write_text(initial_content, encoding="utf-8")
+
+            with patch("django_star.management.commands.star_theme.locate_settings_file", return_value=settings_file):
+                with patch.object(cmd, "_ensure_package_installed", return_value=True):
+                    cmd.handle(theme="simpleui", remove=False, no_pip=True, list=False, yes=True)
+
+            updated = settings_file.read_text(encoding="utf-8")
+            self.assertNotIn("admin_interface", updated)
+            self.assertNotIn("colorfield", updated)
+            self.assertIn('"simpleui",\n    "django.contrib.admin",', updated)
+
+    def test_star_theme_grappelli_wires_and_unwires_urls(self):
+        cmd = StarThemeCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            settings_file = base_dir / "settings.py"
+            settings_file.write_text('INSTALLED_APPS = [\n    "django.contrib.admin",\n]\n', encoding="utf-8")
+
+            urls_file = base_dir / "urls.py"
+            urls_file.write_text('from django.urls import path\nurlpatterns = [\n    path("admin/", None),\n]\n', encoding="utf-8")
+
+            with patch("django_star.management.commands.star_theme.locate_settings_file", return_value=settings_file):
+                with patch("django_star.management.commands.star_theme.locate_root_urls_file", return_value=urls_file):
+                    with patch.object(cmd, "_ensure_package_installed", return_value=True):
+                        # 1. Switch to grappelli -> mounts grappelli.urls
+                        cmd.handle(theme="grappelli", remove=False, no_pip=True, list=False, yes=True)
+
+                        urls_after_grappelli = urls_file.read_text(encoding="utf-8")
+                        self.assertIn('path("grappelli/", include("grappelli.urls")),', urls_after_grappelli)
+                        self.assertIn("include", urls_after_grappelli)
+
+                        # 2. Switch from grappelli to jazzmin -> unwires grappelli.urls
+                        cmd.handle(theme="jazzmin", remove=False, no_pip=True, list=False, yes=True)
+
+                        urls_after_jazzmin = urls_file.read_text(encoding="utf-8")
+                        self.assertNotIn("grappelli.urls", urls_after_jazzmin)
+
+    def test_star_theme_remove_restores_stock_admin(self):
+        cmd = StarThemeCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            settings_file = base_dir / "settings.py"
+            initial_content = 'INSTALLED_APPS = [\n    "jazzmin",\n    "django.contrib.admin",\n]\n'
+            settings_file.write_text(initial_content, encoding="utf-8")
+
+            with patch("django_star.management.commands.star_theme.locate_settings_file", return_value=settings_file):
+                with patch.object(cmd, "_wire_grappelli_urls"):
+                    cmd.handle(theme=None, remove=True, no_pip=True, list=False, yes=True)
+
+            updated = settings_file.read_text(encoding="utf-8")
+            self.assertNotIn("jazzmin", updated)
+            self.assertIn('"django.contrib.admin",', updated)
+
+    def test_star_theme_invalid_choice_raises_command_error(self):
+        from django.core.management.base import CommandError
+        cmd = StarThemeCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            settings_file = Path(tmpdir) / "settings.py"
+            settings_file.write_text('INSTALLED_APPS = []\n', encoding="utf-8")
+            with patch("django_star.management.commands.star_theme.locate_settings_file", return_value=settings_file):
+                with self.assertRaises(CommandError):
+                    cmd.handle(theme="invalid_theme_name", remove=False, no_pip=True, list=False, yes=True)
+
 
 if __name__ == "__main__":
     unittest.main()
+
