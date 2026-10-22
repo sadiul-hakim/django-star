@@ -16,6 +16,10 @@ from django_star.management.commands.star_serializer import Command as StarSeria
 from django_star.management.commands.star_schema import Command as StarSchemaCommand
 from django_star.management.commands.star_theme import Command as StarThemeCommand
 from django_star.management.commands.star_template import Command as StarTemplateCommand
+from django_star.management.commands.star_about import (
+    Command as StarAboutCommand,
+    _is_local_path,
+)
 
 
 class DjangoStarEdgeCaseTests(unittest.TestCase):
@@ -23,6 +27,7 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
         commands = get_commands()
         expected = [
             "star",
+            "star_about",
             "star_app",
             "star_route",
             "star_service",
@@ -695,6 +700,65 @@ urlpatterns = [
                 block="content",
                 force=False,
             )
+
+    def test_star_about_runs_terminal_dashboard(self):
+        import io
+        from rich.console import Console
+        cmd = StarAboutCommand()
+        buf = io.StringIO()
+        test_console = Console(file=buf, force_terminal=False, width=120)
+        with patch("django_star.management.commands.star_about.console", test_console):
+            cmd.handle(json=False)
+            output = buf.getvalue()
+            self.assertIn("Django Star", output)
+            self.assertIn("ENVIRONMENT & CONFIG", output)
+            self.assertIn("DATABASE & MIGRATIONS", output)
+            self.assertIn("APPLICATIONS & ARCHITECTURE", output)
+
+    def test_star_about_json_output(self):
+        import io
+        import json
+        from django.core.management import call_command
+        out = io.StringIO()
+        call_command("star_about", "--json", stdout=out)
+        output_str = out.getvalue()
+        data = json.loads(output_str)
+        self.assertIn("environment", data)
+        self.assertIn("database", data)
+        self.assertIn("apps_architecture", data)
+        self.assertIn("cache_storage", data)
+        self.assertIn("django_version", data["environment"])
+        self.assertIn("total_apps", data["apps_architecture"])
+
+    def test_star_about_migration_unreachable_fallback(self):
+        import io
+        from rich.console import Console
+        cmd = StarAboutCommand()
+        buf = io.StringIO()
+        test_console = Console(file=buf, force_terminal=False, width=120)
+        with patch("django.db.migrations.executor.MigrationExecutor", side_effect=Exception("DB connection error")):
+            with patch("django_star.management.commands.star_about.console", test_console):
+                cmd.handle(json=False)
+                output = buf.getvalue()
+                self.assertIn("Unreachable", output)
+
+    def test_star_about_is_local_path_helper(self):
+        base_dir = Path("/home/user/project")
+        # Direct local app
+        local_app = Path("/home/user/project/blog")
+        self.assertTrue(_is_local_path(local_app, base_dir))
+
+        # Nested apps/ subfolder
+        nested_local = Path("/home/user/project/apps/billing")
+        self.assertTrue(_is_local_path(nested_local, base_dir))
+
+        # Virtual environment inside base_dir should be recognized as non-local
+        venv_app = Path("/home/user/project/.venv/lib/site-packages/some_pkg")
+        self.assertFalse(_is_local_path(venv_app, base_dir))
+
+        # Outside base_dir
+        outside_app = Path("/usr/lib/python3.12/site-packages/django")
+        self.assertFalse(_is_local_path(outside_app, base_dir))
 
 
 if __name__ == "__main__":

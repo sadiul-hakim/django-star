@@ -9,6 +9,7 @@ Artisan-style developer automation, route inspection, and code generators for Dj
 ## Features
 
 * **Interactive Command Catalog (`star`)**: Built-in dashboard listing all available tools, syntax, and categories.
+* **Project Health & Environment Dashboard (`star_about`)**: Artisan-style overview of system configuration, database engine, unapplied migrations, app breakdown, active theme, and storage with optional `--json` export.
 * **Admin Theme Manager (`star_theme`)**: One-click installation and configuration for top Django admin themes (`django-grappelli`, `django-simpleui`, `django-admin-interface`, `django-jazzmin`) with automatic dependency installation, settings.py injection, route management, and seamless theme switching.
 * **Automated `admin.py` Generation (`star_admin`)**: Reflects on Django ORM models and automatically configures `list_display`, `search_fields`, and `list_filter` for single models or an entire app at once.
 
@@ -85,12 +86,25 @@ View all available `django-star` commands and flags:
 
 ```bash
 python manage.py star
-
 ```
 
 ---
 
-### 1. Route Inspector (`star_urls`)
+### 1. Project Health & Environment Dashboard (`star_about`)
+
+Inspect your live Django configuration, database health, migration status, and application architecture in an interactive terminal dashboard:
+
+```bash
+# Display terminal health dashboard
+python manage.py star_about
+
+# Output machine-readable metrics as JSON
+python manage.py star_about --json
+```
+
+---
+
+### 2. Route Inspector (`star_urls`)
 
 Display all project routes in a clean, colored table:
 
@@ -108,7 +122,7 @@ python manage.py star_urls -e admin __debug__
 
 ---
 
-### 2. Zero-Wiring App Generator (`star_app`)
+### 3. Zero-Wiring App Generator (`star_app`)
 
 Runs `startapp`, registers the app in `settings.py`, generates `urls.py`, and mounts the route inside root `urls.py` in one step. Automatically creates `.bak` backups before modifying any files:
 
@@ -122,7 +136,7 @@ python manage.py star_app billing --dir apps/
 
 ---
 
-### 3. Existing App Route & Template Wiring (`star_route`)
+### 4. Existing App Route & Template Wiring (`star_route`)
 
 For existing apps: generates `<app>/urls.py`, creates `templates/<app>/index.html`, and mounts the route into root `urls.py`:
 
@@ -140,7 +154,7 @@ python manage.py star_route payments --no-template
 
 ---
 
-### 4. Auto-generate `ModelAdmin` (`star_admin`)
+### 5. Auto-generate `ModelAdmin` (`star_admin`)
 
 Inspects models via runtime ORM reflection and appends configured `@admin.register` blocks to `<app>/admin.py`:
 
@@ -155,7 +169,7 @@ python manage.py star_admin blog
 
 ---
 
-### 5. Admin Theme Manager (`star_theme`)
+### 6. Admin Theme Manager (`star_theme`)
 
 Instantly switch between popular Django admin themes without manually touching `admin.py`. Automatically handles `pip install`, `INSTALLED_APPS` replacement, `X_FRAME_OPTIONS`, route wiring, and database migrations:
 
@@ -178,7 +192,7 @@ python manage.py star_theme --remove
 
 ---
 
-### 6. DRF Serializer Generator (`star_serializer`)
+### 7. DRF Serializer Generator (`star_serializer`)
 
 Auto-generates `serializers.ModelSerializer` classes inside `<app>/serializers.py`:
 
@@ -193,7 +207,7 @@ python manage.py star_serializer blog
 
 ---
 
-### 7. Django Ninja Schema Generator (`star_schema`)
+### 8. Django Ninja Schema Generator (`star_schema`)
 
 Maps ORM fields to Python types and creates `ModelIn` and `ModelOut` schemas in `<app>/schemas.py`:
 
@@ -208,7 +222,7 @@ python manage.py star_schema blog
 
 ---
 
-### 8. Scaffold a Service Layer (`star_service`)
+### 9. Scaffold a Service Layer (`star_service`)
 
 Creates a service module inside `<app>/services/<name>_service.py` wrapped with `@transaction.atomic`:
 
@@ -219,7 +233,7 @@ python manage.py star_service billing process_payment
 
 ---
 
-### 9. Scaffold a Management Command (`star_command`)
+### 10. Scaffold a Management Command (`star_command`)
 
 
 Sets up nested directory paths (`<app>/management/commands/`), `__init__.py` files, and a ready-to-run command skeleton:
@@ -231,7 +245,7 @@ python manage.py star_command core sync_data
 
 ---
 
-### 10. Template Scaffolding (`star_template`)
+### 11. Template Scaffolding (`star_template`)
 
 Generates templates inside your app following Django's official **template namespacing** standard (`<app>/templates/<app>/<name>.html`), preventing naming collisions across installed applications:
 

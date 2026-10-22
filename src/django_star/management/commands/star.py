@@ -53,6 +53,11 @@ COMMANDS_REGISTRY = [
         "category": "Inspection & Debugging",
         "commands": [
             {
+                "name": "star_about",
+                "args": "[--json]",
+                "desc": "Displays project overview, health, database, apps & config dashboard.",
+            },
+            {
                 "name": "star_urls",
                 "args": "[filter] [-e/--exclude app ...]",
                 "desc": "Displays interactive table of registered URLs & callback views.",
