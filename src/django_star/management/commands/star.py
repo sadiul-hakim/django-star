@@ -13,6 +13,16 @@ COMMANDS_REGISTRY = [
                 "desc": "Scaffolds a new app and auto-wires settings, urls & root urls.",
             },
             {
+                "name": "star_crud",
+                "args": "<app_name> [model] [--all] [--api]",
+                "desc": "Scaffolds complete CRUD views, URL routes & HTML templates.",
+            },
+            {
+                "name": "star_view",
+                "args": "<app_name> [model_or_view] [--crud] [--api] [--fbv]",
+                "desc": "Generates Class-Based Views, ViewSets, or FBVs with URL routes.",
+            },
+            {
                 "name": "star_route",
                 "args": "<app_name> [--prefix] [--no-template]",
                 "desc": "Wires existing app: creates urls.py, templates & root route.",

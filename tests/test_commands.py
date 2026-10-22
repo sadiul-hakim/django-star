@@ -20,6 +20,11 @@ from django_star.management.commands.star_about import (
     Command as StarAboutCommand,
     _is_local_path,
 )
+from django_star.management.commands.star_view import (
+    Command as StarViewCommand,
+    pluralize_name,
+)
+from django_star.management.commands.star_crud import Command as StarCrudCommand
 
 
 class DjangoStarEdgeCaseTests(unittest.TestCase):
@@ -29,6 +34,7 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
             "star",
             "star_about",
             "star_app",
+            "star_crud",
             "star_route",
             "star_service",
             "star_command",
@@ -38,6 +44,7 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
             "star_schema",
             "star_theme",
             "star_template",
+            "star_view",
         ]
         for cmd in expected:
             self.assertIn(cmd, commands, f"Command {cmd} should be registered")
@@ -67,6 +74,29 @@ class DjangoStarEdgeCaseTests(unittest.TestCase):
         self.assertIsNotNone(res_nested)
         # Verify route was inserted before the final closing delimiter, not inside path()
         self.assertTrue(res_nested.endswith('    path("billing/", include("billing.urls")),\n)\n'))
+
+    def test_safe_insert_into_collection_inline_item_adds_comma(self):
+        c_inline = 'urlpatterns = [path("", views.home, name="home")]'
+        new_route = '    path("authors/", views.AuthorListView.as_view(), name="author_list"),\n'
+        res = safe_insert_into_collection(c_inline, "urlpatterns", new_route)
+        self.assertIsNotNone(res)
+        # Verify comma was added to previous entry
+        self.assertIn('path("", views.home, name="home"),', res)
+        self.assertIn('path("authors/", views.AuthorListView.as_view(), name="author_list"),', res)
+
+    def test_safe_insert_into_collection_multiline_missing_comma_adds_comma(self):
+        c_multiline = 'urlpatterns = [\n    path("admin/", admin.site.urls)\n]\n'
+        new_route = '    path("blog/", include("blog.urls")),\n'
+        res = safe_insert_into_collection(c_multiline, "urlpatterns", new_route)
+        self.assertIsNotNone(res)
+        self.assertIn('path("admin/", admin.site.urls),', res)
+
+    def test_safe_insert_into_collection_line_with_comment_adds_comma_before_comment(self):
+        c_comment = 'urlpatterns = [\n    path("admin/", admin.site.urls)  # admin site\n]\n'
+        new_route = '    path("blog/", include("blog.urls")),\n'
+        res = safe_insert_into_collection(c_comment, "urlpatterns", new_route)
+        self.assertIsNotNone(res)
+        self.assertIn('path("admin/", admin.site.urls),  # admin site', res)
 
     def test_safe_insert_into_collection_unparseable_returns_none(self):
         c_dynamic = 'INSTALLED_APPS += ["dynamic_app"]\n'
@@ -759,6 +789,217 @@ urlpatterns = [
         # Outside base_dir
         outside_app = Path("/usr/lib/python3.12/site-packages/django")
         self.assertFalse(_is_local_path(outside_app, base_dir))
+
+    def test_pluralize_name_helper(self):
+        self.assertEqual(pluralize_name("Post"), "posts")
+        self.assertEqual(pluralize_name("Category"), "categories")
+        self.assertEqual(pluralize_name("Box"), "boxes")
+        self.assertEqual(pluralize_name("Person"), "people")
+        self.assertEqual(pluralize_name("Child"), "children")
+        self.assertEqual(pluralize_name("Hero"), "heroes")
+
+    def test_star_view_crud_generation(self):
+        cmd = StarViewCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app_dir = Path(tmpdir)
+            views_file = app_dir / "views.py"
+            views_file.write_text("from django.shortcuts import render\n", encoding="utf-8")
+            urls_file = app_dir / "urls.py"
+            urls_file.write_text("from django.urls import path\nurlpatterns = []\n", encoding="utf-8")
+
+            mock_model = MagicMock()
+            mock_model.__name__ = "Article"
+            mock_model._meta.abstract = False
+            mock_model._meta.auto_created = False
+            field1 = MagicMock()
+            field1.name = "title"
+            field1.column = "title"
+            field1.primary_key = False
+            field1.many_to_many = False
+            field1.auto_now = False
+            field1.auto_now_add = False
+            mock_model._meta.get_fields.return_value = [field1]
+
+            mock_app_config = MagicMock()
+            mock_app_config.label = "blog"
+            mock_app_config.path = str(app_dir)
+
+            with patch("django_star.management.commands.star_view.apps.get_app_config", return_value=mock_app_config):
+                with patch("django_star.management.commands.star_view.apps.get_model", return_value=mock_model):
+                    cmd.handle(
+                        app_name="blog",
+                        name="Article",
+                        crud=True,
+                        api=False,
+                        all=False,
+                        no_templates=False,
+                        no_urls=False,
+                        fbv=False,
+                        type=None,
+                        force=False,
+                    )
+
+            # Check views.py
+            views_content = views_file.read_text(encoding="utf-8")
+            self.assertIn("class ArticleListView(ListView):", views_content)
+            self.assertIn("class ArticleDetailView(DetailView):", views_content)
+            self.assertIn("class ArticleCreateView(CreateView):", views_content)
+            self.assertIn("class ArticleUpdateView(UpdateView):", views_content)
+            self.assertIn("class ArticleDeleteView(DeleteView):", views_content)
+
+            # Check urls.py
+            urls_content = urls_file.read_text(encoding="utf-8")
+            self.assertIn("article_list", urls_content)
+            self.assertIn("article_create", urls_content)
+            self.assertIn("article_detail", urls_content)
+
+            # Check templates
+            tpl_dir = app_dir / "templates" / "blog"
+            self.assertTrue((tpl_dir / "article_list.html").exists())
+            self.assertTrue((tpl_dir / "article_detail.html").exists())
+            self.assertTrue((tpl_dir / "article_form.html").exists())
+            self.assertTrue((tpl_dir / "article_confirm_delete.html").exists())
+
+    def test_star_crud_shortcut_command(self):
+        cmd = StarCrudCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app_dir = Path(tmpdir)
+            views_file = app_dir / "views.py"
+            views_file.write_text("", encoding="utf-8")
+            urls_file = app_dir / "urls.py"
+            urls_file.write_text("from django.urls import path\nurlpatterns = []\n", encoding="utf-8")
+
+            mock_model = MagicMock()
+            mock_model.__name__ = "Product"
+            mock_model._meta.abstract = False
+            mock_model._meta.auto_created = False
+            mock_model._meta.get_fields.return_value = []
+
+            mock_app_config = MagicMock()
+            mock_app_config.label = "shop"
+            mock_app_config.path = str(app_dir)
+
+            with patch("django_star.management.commands.star_view.apps.get_app_config", return_value=mock_app_config):
+                with patch("django_star.management.commands.star_view.apps.get_model", return_value=mock_model):
+                    cmd.handle(
+                        app_name="shop",
+                        name="Product",
+                        api=False,
+                        all=False,
+                        no_templates=True,
+                        no_urls=False,
+                        fbv=False,
+                        type=None,
+                        force=False,
+                    )
+
+            views_content = views_file.read_text(encoding="utf-8")
+            self.assertIn("class ProductListView(ListView):", views_content)
+
+    def test_star_view_api_mode(self):
+        cmd = StarViewCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app_dir = Path(tmpdir)
+            views_file = app_dir / "views.py"
+            views_file.write_text("", encoding="utf-8")
+            urls_file = app_dir / "urls.py"
+            urls_file.write_text("from django.urls import path\nurlpatterns = []\n", encoding="utf-8")
+
+            mock_model = MagicMock()
+            mock_model.__name__ = "Order"
+            mock_model._meta.abstract = False
+            mock_model._meta.auto_created = False
+            mock_model._meta.get_fields.return_value = []
+
+            mock_app_config = MagicMock()
+            mock_app_config.label = "shop"
+            mock_app_config.path = str(app_dir)
+
+            with patch("django_star.management.commands.star_view.apps.get_app_config", return_value=mock_app_config):
+                with patch("django_star.management.commands.star_view.apps.get_model", return_value=mock_model):
+                    cmd.handle(
+                        app_name="shop",
+                        name="Order",
+                        crud=True,
+                        api=True,
+                        all=False,
+                        no_templates=True,
+                        no_urls=False,
+                        fbv=False,
+                        type=None,
+                        force=False,
+                    )
+
+            views_content = views_file.read_text(encoding="utf-8")
+            self.assertIn("class OrderViewSet(viewsets.ModelViewSet):", views_content)
+            urls_content = urls_file.read_text(encoding="utf-8")
+            self.assertIn("DefaultRouter", urls_content)
+
+    def test_star_view_single_fbv_mode(self):
+        cmd = StarViewCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app_dir = Path(tmpdir)
+            views_file = app_dir / "views.py"
+            views_file.write_text("", encoding="utf-8")
+            urls_file = app_dir / "urls.py"
+            urls_file.write_text("from django.urls import path\nurlpatterns = []\n", encoding="utf-8")
+
+            mock_app_config = MagicMock()
+            mock_app_config.label = "main"
+            mock_app_config.path = str(app_dir)
+
+            with patch("django_star.management.commands.star_view.apps.get_app_config", return_value=mock_app_config):
+                with patch("django_star.management.commands.star_view.apps.get_model", side_effect=LookupError):
+                    cmd.handle(
+                        app_name="main",
+                        name="about_us",
+                        crud=False,
+                        api=False,
+                        all=False,
+                        no_templates=False,
+                        no_urls=False,
+                        fbv=True,
+                        type=None,
+                        force=False,
+                    )
+
+            views_content = views_file.read_text(encoding="utf-8")
+            self.assertIn("def about_us(request):", views_content)
+            urls_content = urls_file.read_text(encoding="utf-8")
+            self.assertIn('path("about_us/", views.about_us, name="about_us")', urls_content)
+
+    def test_star_view_single_cbv_template_view(self):
+        cmd = StarViewCommand()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app_dir = Path(tmpdir)
+            views_file = app_dir / "views.py"
+            views_file.write_text("", encoding="utf-8")
+            urls_file = app_dir / "urls.py"
+            urls_file.write_text("from django.urls import path\nurlpatterns = []\n", encoding="utf-8")
+
+            mock_app_config = MagicMock()
+            mock_app_config.label = "main"
+            mock_app_config.path = str(app_dir)
+
+            with patch("django_star.management.commands.star_view.apps.get_app_config", return_value=mock_app_config):
+                with patch("django_star.management.commands.star_view.apps.get_model", side_effect=LookupError):
+                    cmd.handle(
+                        app_name="main",
+                        name="DashboardView",
+                        crud=False,
+                        api=False,
+                        all=False,
+                        no_templates=False,
+                        no_urls=False,
+                        fbv=False,
+                        type="TemplateView",
+                        force=False,
+                    )
+
+            views_content = views_file.read_text(encoding="utf-8")
+            self.assertIn("class DashboardView(TemplateView):", views_content)
+            urls_content = urls_file.read_text(encoding="utf-8")
+            self.assertIn("views.DashboardView.as_view()", urls_content)
 
 
 if __name__ == "__main__":

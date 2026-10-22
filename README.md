@@ -13,6 +13,8 @@ Artisan-style developer automation, route inspection, and code generators for Dj
 * **Admin Theme Manager (`star_theme`)**: One-click installation and configuration for top Django admin themes (`django-grappelli`, `django-simpleui`, `django-admin-interface`, `django-jazzmin`) with automatic dependency installation, settings.py injection, route management, and seamless theme switching.
 * **Automated `admin.py` Generation (`star_admin`)**: Reflects on Django ORM models and automatically configures `list_display`, `search_fields`, and `list_filter` for single models or an entire app at once.
 
+* **Full CRUD Generator (`star_crud`)**: Scaffolds complete CRUD Class-Based Views (`ListView`, `DetailView`, `CreateView`, `UpdateView`, `DeleteView`), wires URL routes into `<app>/urls.py`, and generates styled HTML templates in one step.
+* **Flexible View Scaffolder (`star_view`)**: Generates Class-Based Views, DRF `ModelViewSet` classes (`--api`), or Function-Based Views (`--fbv`) with automatic URL routing.
 * **Route Inspector (`star_urls`)**: Interactive terminal table displaying all registered URL patterns, callback views, and namespaces with search filters and app exclusion (`-e`).
 * **Zero-Wiring App Generator (`star_app`)**: Scaffolds a new app, registers it in `settings.py` (`INSTALLED_APPS`), creates `urls.py`, and mounts it directly into root `urls.py`.
 * **Existing App Route & Template Wiring (`star_route`)**: Wires up pre-existing apps by generating `urls.py`, default HTML templates, and mounting routes in root `urls.py`.
@@ -136,7 +138,44 @@ python manage.py star_app billing --dir apps/
 
 ---
 
-### 4. Existing App Route & Template Wiring (`star_route`)
+### 4. Full CRUD Generator (`star_crud`)
+
+Scaffolds complete CRUD Class-Based Views (`ListView`, `DetailView`, `CreateView`, `UpdateView`, `DeleteView`), registers URL routes in `<app>/urls.py`, and generates styled HTML templates in one command:
+
+```bash
+# Generate full CRUD for a single model
+python manage.py star_crud blog Post
+
+# Generate CRUD for ALL models in an app
+python manage.py star_crud blog --all
+
+# API-only: generate DRF ModelViewSet and wire DefaultRouter
+python manage.py star_crud blog Post --api
+
+# Headless / skip template generation
+python manage.py star_crud blog Post --no-templates
+```
+
+---
+
+### 5. Flexible View Scaffolding (`star_view`)
+
+Create specific generic Class-Based Views or Function-Based Views (FBVs) with automatic route wiring:
+
+```bash
+# Generate a specific generic CBV
+python manage.py star_view blog DashboardView --type TemplateView
+
+# Generate a Function-Based View (FBV)
+python manage.py star_view blog contact_us --fbv
+
+# Generate CRUD views with options
+python manage.py star_view blog Post --crud
+```
+
+---
+
+### 6. Existing App Route & Template Wiring (`star_route`)
 
 For existing apps: generates `<app>/urls.py`, creates `templates/<app>/index.html`, and mounts the route into root `urls.py`:
 
@@ -154,7 +193,7 @@ python manage.py star_route payments --no-template
 
 ---
 
-### 5. Auto-generate `ModelAdmin` (`star_admin`)
+### 7. Auto-generate `ModelAdmin` (`star_admin`)
 
 Inspects models via runtime ORM reflection and appends configured `@admin.register` blocks to `<app>/admin.py`:
 
@@ -169,7 +208,7 @@ python manage.py star_admin blog
 
 ---
 
-### 6. Admin Theme Manager (`star_theme`)
+### 8. Admin Theme Manager (`star_theme`)
 
 Instantly switch between popular Django admin themes without manually touching `admin.py`. Automatically handles `pip install`, `INSTALLED_APPS` replacement, `X_FRAME_OPTIONS`, route wiring, and database migrations:
 
@@ -192,7 +231,7 @@ python manage.py star_theme --remove
 
 ---
 
-### 7. DRF Serializer Generator (`star_serializer`)
+### 9. DRF Serializer Generator (`star_serializer`)
 
 Auto-generates `serializers.ModelSerializer` classes inside `<app>/serializers.py`:
 
@@ -207,7 +246,7 @@ python manage.py star_serializer blog
 
 ---
 
-### 8. Django Ninja Schema Generator (`star_schema`)
+### 10. Django Ninja Schema Generator (`star_schema`)
 
 Maps ORM fields to Python types and creates `ModelIn` and `ModelOut` schemas in `<app>/schemas.py`:
 
@@ -222,7 +261,7 @@ python manage.py star_schema blog
 
 ---
 
-### 9. Scaffold a Service Layer (`star_service`)
+### 11. Scaffold a Service Layer (`star_service`)
 
 Creates a service module inside `<app>/services/<name>_service.py` wrapped with `@transaction.atomic`:
 
@@ -233,7 +272,7 @@ python manage.py star_service billing process_payment
 
 ---
 
-### 10. Scaffold a Management Command (`star_command`)
+### 12. Scaffold a Management Command (`star_command`)
 
 
 Sets up nested directory paths (`<app>/management/commands/`), `__init__.py` files, and a ready-to-run command skeleton:
@@ -245,7 +284,7 @@ python manage.py star_command core sync_data
 
 ---
 
-### 11. Template Scaffolding (`star_template`)
+### 13. Template Scaffolding (`star_template`)
 
 Generates templates inside your app following Django's official **template namespacing** standard (`<app>/templates/<app>/<name>.html`), preventing naming collisions across installed applications:
 

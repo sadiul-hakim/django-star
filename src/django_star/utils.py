@@ -1,5 +1,7 @@
 import ast
+import io
 import re
+import tokenize
 from pathlib import Path
 from django.conf import settings
 from django_star.console import console
@@ -18,10 +20,78 @@ def create_backup(file_path: Path) -> Path | None:
         return None
 
 
+def add_trailing_comma_to_body(body: str) -> str:
+    """
+    Ensures that the last code item in a collection body ends with a comma.
+    Safely handles comments, whitespace, and nested tokens.
+    """
+    if not body.strip():
+        return body
+
+    lines = body.splitlines(keepends=True)
+    target_line_idx = None
+    for idx in range(len(lines) - 1, -1, -1):
+        line = lines[idx]
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            target_line_idx = idx
+            break
+
+    if target_line_idx is None:
+        return body
+
+    target_line = lines[target_line_idx]
+
+    try:
+        tokens = list(tokenize.tokenize(io.BytesIO(target_line.encode("utf-8")).readline))
+        ignored_types = (
+            tokenize.ENCODING,
+            tokenize.ENDMARKER,
+            tokenize.NEWLINE,
+            tokenize.NL,
+            tokenize.INDENT,
+            tokenize.DEDENT,
+        )
+        meaningful = [t for t in tokens if t.type not in ignored_types]
+        if not meaningful:
+            return body
+
+        last_code_token = None
+        for t in reversed(meaningful):
+            if t.type != tokenize.COMMENT:
+                last_code_token = t
+                break
+
+        if last_code_token and last_code_token.string == ",":
+            return body
+
+        if last_code_token:
+            col = last_code_token.end[1]
+            patched_line = target_line[:col] + "," + target_line[col:]
+            lines[target_line_idx] = patched_line
+            return "".join(lines)
+    except Exception:
+        stripped = target_line.rstrip("\r\n")
+        newline_ending = target_line[len(stripped):]
+        if "#" in stripped:
+            code_part, comment_part = stripped.split("#", 1)
+            code_part = code_part.rstrip()
+            if not code_part.endswith(","):
+                code_part += ","
+            lines[target_line_idx] = code_part + "  #" + comment_part + newline_ending
+        else:
+            if not stripped.endswith(","):
+                lines[target_line_idx] = stripped + "," + newline_ending
+        return "".join(lines)
+
+    return body
+
+
 def safe_insert_into_collection(content: str, variable_name: str, new_entry: str) -> str | None:
     """
     Safely inserts new_entry into a list [...] or tuple (...) variable definition
     by tracking delimiter depth to handle nested calls (like path()) without corrupting code.
+    Ensures trailing commas on existing elements and formats inline collections cleanly.
     Returns the updated content string, or None if the variable could not be safely parsed.
     """
     pattern = rf"({variable_name}\s*=\s*(\[|\())"
@@ -53,8 +123,22 @@ def safe_insert_into_collection(content: str, variable_name: str, new_entry: str
     tail = content[close_idx:]
 
     entry = new_entry
-    if body and not body.endswith("\n"):
-        entry = "\n" + entry
+
+    if body.strip():
+        body = add_trailing_comma_to_body(body)
+        if not head.endswith("\n"):
+            head = head + "\n"
+            body = "    " + body.strip() + "\n"
+        else:
+            if not body.endswith("\n"):
+                body = body + "\n"
+    else:
+        # Empty collection e.g. [] or ()
+        if not head.endswith("\n"):
+            head = head + "\n"
+
+    if not entry.endswith("\n"):
+        entry = entry + "\n"
 
     return f"{head}{body}{entry}{tail}"
 
