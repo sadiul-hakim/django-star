@@ -23,6 +23,11 @@ COMMANDS_REGISTRY = [
                 "desc": "Generates Class-Based Views, ViewSets, or FBVs with URL routes.",
             },
             {
+                "name": "star_form",
+                "args": "<app_name> [model_name] [--all]",
+                "desc": "Auto-generates Django ModelForm classes with Meta fields.",
+            },
+            {
                 "name": "star_route",
                 "args": "<app_name> [--prefix] [--no-template]",
                 "desc": "Wires existing app: creates urls.py, templates & root route.",
