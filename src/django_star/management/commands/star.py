@@ -72,6 +72,11 @@ COMMANDS_REGISTRY = [
                 "args": "[filter] [-e/--exclude app ...]",
                 "desc": "Displays interactive table of registered URLs & callback views.",
             },
+            {
+                "name": "star_models",
+                "args": "<app_name> [-f] [-e]",
+                "desc": "Displays interactive table of registered models.",
+            },
         ],
     },
     {
@@ -131,4 +136,3 @@ class Command(BaseCommand):
         console.print(
             "[dim]Tip: Add '--help' to any specific command for detailed argument flags (e.g. python manage.py star_urls --help)[/dim]"
         )
-
