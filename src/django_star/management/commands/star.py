@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from rich.panel import Panel
 from rich.table import Table
+
 from django_star.console import console
 
 COMMANDS_REGISTRY = [
@@ -97,6 +98,16 @@ COMMANDS_REGISTRY = [
                 "args": "<app_name> [model] [--all]",
                 "desc": "Auto-generates Django Ninja In and Out schema classes.",
             },
+        ],
+    },
+    {
+        "category": "Other",
+        "commands": [
+            {
+                "name": "star_gitignore",
+                "args": "",
+                "desc": "Auto-generates a .gitignore file.",
+            }
         ],
     },
 ]
